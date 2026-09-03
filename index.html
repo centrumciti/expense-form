@@ -36,6 +36,19 @@
   button#submitBtn:disabled { background: #aaa; }
   #status { margin-top: 12px; font-size: 13px; text-align: center; color: #666; }
   #status.error { color: #e04b4b; }
+
+  .divider { border: none; border-top: 1px solid #e0e0e0; margin: 32px 0 20px; }
+  h2.section-title { font-size: 15px; margin: 0 0 12px; color: #333; }
+  .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .quick-btn {
+    padding: 14px 8px; border-radius: 10px; border: 1px solid #ddd;
+    background: #fff; font-size: 14px; font-weight: 600; color: #333;
+  }
+  .quick-btn.danger {
+    grid-column: 1 / -1; border: 2px solid #e04b4b; color: #e04b4b; background: #fff5f5;
+  }
+  #quickStatus { margin-top: 12px; font-size: 13px; text-align: center; color: #666; }
+  #quickStatus.error { color: #e04b4b; }
 </style>
 </head>
 <body>
@@ -69,6 +82,16 @@
 
 <button id="submitBtn">ส่งข้อมูล</button>
 <div id="status"></div>
+
+<hr class="divider">
+<h2 class="section-title">คำสั่งด่วน</h2>
+<div class="quick-grid">
+  <button type="button" class="quick-btn" data-cmd="สรุป">สรุป</button>
+  <button type="button" class="quick-btn" data-cmd="คืนทุน">คืนทุน</button>
+  <button type="button" class="quick-btn" data-cmd="ค่าใช้จ่ายเดือนนี้">ค่าใช้จ่ายเดือนนี้</button>
+  <button type="button" class="quick-btn danger" data-cmd="ลบล่าสุด">ลบรายการล่าสุด</button>
+</div>
+<div id="quickStatus"></div>
 
 <script>
   const LIFF_ID = "2011412816-xGVEjhx9";
@@ -122,6 +145,29 @@
       statusEl.classList.add("error");
       submitBtn.disabled = false;
     }
+  });
+
+  const quickStatusEl = document.getElementById("quickStatus");
+  document.querySelectorAll(".quick-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const cmd = btn.getAttribute("data-cmd");
+      if (cmd === "ลบล่าสุด") {
+        const ok = confirm("ยืนยันลบรายการค่าใช้จ่ายล่าสุดที่บันทึกไว้?");
+        if (!ok) return;
+      }
+      document.querySelectorAll(".quick-btn").forEach((b) => (b.disabled = true));
+      quickStatusEl.classList.remove("error");
+      quickStatusEl.textContent = "กำลังส่ง...";
+      try {
+        await liff.sendMessages([{ type: "text", text: cmd }]);
+        quickStatusEl.textContent = "ส่งสำเร็จ กำลังปิดหน้าต่าง...";
+        setTimeout(() => liff.closeWindow(), 800);
+      } catch (err) {
+        quickStatusEl.textContent = "ส่งไม่สำเร็จ: " + (err && err.message ? err.message : "ลองใหม่อีกครั้ง");
+        quickStatusEl.classList.add("error");
+        document.querySelectorAll(".quick-btn").forEach((b) => (b.disabled = false));
+      }
+    });
   });
 
   liff.init({ liffId: LIFF_ID })
