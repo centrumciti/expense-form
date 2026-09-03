@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บันทึกค่าใช้จ่าย</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Noto Sans Thai", sans-serif;
+    background: #f4f6f8;
+    margin: 0;
+    padding: 20px 16px 40px;
+    color: #222;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.sub { color: #666; font-size: 13px; margin-top: 0; margin-bottom: 20px; }
+  .type-toggle { display: flex; gap: 8px; margin-bottom: 18px; }
+  .type-btn {
+    flex: 1; padding: 12px; border-radius: 10px; border: 2px solid #ddd;
+    background: #fff; font-size: 15px; font-weight: 600; color: #666;
+  }
+  .type-btn.active.variable { border-color: #ff7a45; color: #ff7a45; background: #fff3ec; }
+  .type-btn.active.fixed { border-color: #4a7cff; color: #4a7cff; background: #eef2ff; }
+  label { display: block; font-size: 13px; font-weight: 600; color: #444; margin: 16px 0 6px; }
+  select, input, textarea {
+    width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ddd;
+    font-size: 16px; background: #fff;
+  }
+  textarea { resize: none; min-height: 60px; }
+  button#submitBtn {
+    margin-top: 24px; width: 100%; padding: 14px; border: none; border-radius: 10px;
+    background: #06c755; color: #fff; font-size: 16px; font-weight: 700;
+  }
+  button#submitBtn:disabled { background: #aaa; }
+  #status { margin-top: 12px; font-size: 13px; text-align: center; color: #666; }
+  #status.error { color: #e04b4b; }
+</style>
+</head>
+<body>
+
+<h1>บันทึกค่าใช้จ่าย</h1>
+<p class="sub">เลือกประเภท กรอกข้อมูล แล้วกดส่ง</p>
+
+<div class="type-toggle">
+  <button type="button" class="type-btn variable active" id="btnVariable">ผันแปร (จ่าย)</button>
+  <button type="button" class="type-btn fixed" id="btnFixed">คงที่</button>
+</div>
+
+<label for="category">หมวด</label>
+<select id="category">
+  <option value="ค่าน้ำ">ค่าน้ำ</option>
+  <option value="ค่าไฟ">ค่าไฟ</option>
+  <option value="ค่าเช่า">ค่าเช่า</option>
+  <option value="ค่าโฟม">ค่าโฟม</option>
+  <option value="ค่าซ่อมบำรุง">ค่าซ่อมบำรุง</option>
+  <option value="ค่าเบ็ดเตล็ด">ค่าเบ็ดเตล็ด</option>
+</select>
+
+<label for="amount">จำนวนเงิน (บาท)</label>
+<input type="number" id="amount" inputmode="decimal" placeholder="เช่น 500" min="0" step="0.01">
+
+<label for="dateInput">วันที่ (ไม่กรอก = วันนี้)</label>
+<input type="date" id="dateInput">
+
+<label for="detail">รายละเอียด (ไม่บังคับ)</label>
+<textarea id="detail" placeholder="เช่น ค่าน้ำประปาเดือนนี้"></textarea>
+
+<button id="submitBtn">ส่งข้อมูล</button>
+<div id="status"></div>
+
+<script>
+  const LIFF_ID = "2011412816-xGVEjhx9";
+  let currentType = "จ่าย";
+
+  const btnVariable = document.getElementById("btnVariable");
+  const btnFixed = document.getElementById("btnFixed");
+  const statusEl = document.getElementById("status");
+  const submitBtn = document.getElementById("submitBtn");
+
+  btnVariable.addEventListener("click", () => {
+    currentType = "จ่าย";
+    btnVariable.classList.add("active");
+    btnFixed.classList.remove("active");
+  });
+  btnFixed.addEventListener("click", () => {
+    currentType = "คงที่";
+    btnFixed.classList.add("active");
+    btnVariable.classList.remove("active");
+  });
+
+  function pad(n) { return n < 10 ? "0" + n : n; }
+
+  submitBtn.addEventListener("click", async () => {
+    const category = document.getElementById("category").value;
+    const amount = document.getElementById("amount").value;
+    const dateVal = document.getElementById("dateInput").value; // YYYY-MM-DD or ""
+    const detail = document.getElementById("detail").value.trim();
+
+    if (!amount || Number(amount) <= 0) {
+      statusEl.textContent = "กรุณากรอกจำนวนเงินให้ถูกต้อง";
+      statusEl.classList.add("error");
+      return;
+    }
+
+    let parts = [currentType, category, amount];
+    if (dateVal) parts.push(dateVal);
+    if (detail) parts.push(detail);
+    const message = parts.join(" ");
+
+    submitBtn.disabled = true;
+    statusEl.classList.remove("error");
+    statusEl.textContent = "กำลังส่ง...";
+
+    try {
+      await liff.sendMessages([{ type: "text", text: message }]);
+      statusEl.textContent = "ส่งสำเร็จ กำลังปิดหน้าต่าง...";
+      setTimeout(() => liff.closeWindow(), 800);
+    } catch (err) {
+      statusEl.textContent = "ส่งไม่สำเร็จ: " + (err && err.message ? err.message : "ลองใหม่อีกครั้ง");
+      statusEl.classList.add("error");
+      submitBtn.disabled = false;
+    }
+  });
+
+  liff.init({ liffId: LIFF_ID })
+    .then(() => {
+      if (!liff.isLoggedIn()) {
+        liff.login();
+      }
+    })
+    .catch((err) => {
+      statusEl.textContent = "เปิดใช้งานไม่สำเร็จ: " + (err && err.message ? err.message : "");
+      statusEl.classList.add("error");
+    });
+</script>
+
+</body>
+</html>
