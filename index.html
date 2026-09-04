@@ -89,6 +89,11 @@
 <script>
   const LIFF_ID = "2011412816-xGVEjhx9";
   let currentType = "จ่าย";
+  let userDisplayName = "";
+
+  function withName(text) {
+    return userDisplayName ? text + " (บันทึกโดย: " + userDisplayName + ")" : text;
+  }
 
   const ALL_CATEGORIES = ["ค่าน้ำ", "ค่าไฟ", "ค่าเช่า", "ค่าโฟม", "ค่าซ่อมบำรุง", "ค่าเบ็ดเตล็ด"];
   const RECOMMENDED = {
@@ -167,7 +172,7 @@
     let parts = [currentType, category, amount];
     if (dateVal) parts.push(dateVal);
     if (detail) parts.push(detail);
-    const message = parts.join(" ");
+    const message = withName(parts.join(" "));
 
     submitBtn.disabled = true;
     statusEl.classList.remove("error");
@@ -195,8 +200,9 @@
       document.querySelectorAll(".quick-btn").forEach((b) => (b.disabled = true));
       quickStatusEl.classList.remove("error");
       quickStatusEl.textContent = "กำลังส่ง...";
+      const textToSend = cmd === "ลบล่าสุด" ? withName(cmd) : cmd;
       try {
-        await liff.sendMessages([{ type: "text", text: cmd }]);
+        await liff.sendMessages([{ type: "text", text: textToSend }]);
         quickStatusEl.textContent = "ส่งสำเร็จ กำลังปิดหน้าต่าง...";
         setTimeout(() => liff.closeWindow(), 800);
       } catch (err) {
@@ -208,9 +214,16 @@
   });
 
   liff.init({ liffId: LIFF_ID })
-    .then(() => {
+    .then(async () => {
       if (!liff.isLoggedIn()) {
         liff.login();
+        return;
+      }
+      try {
+        const profile = await liff.getProfile();
+        userDisplayName = profile.displayName || "";
+      } catch (e) {
+        // ถ้าดึงชื่อไม่ได้ ก็ยังส่งข้อมูลได้ปกติ เพียงแค่ไม่มีชื่อกำกับ
       }
     })
     .catch((err) => {
