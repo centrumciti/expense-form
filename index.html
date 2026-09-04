@@ -49,6 +49,22 @@
   }
   #quickStatus { margin-top: 12px; font-size: 13px; text-align: center; color: #666; }
   #quickStatus.error { color: #e04b4b; }
+
+  .pick-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .pick-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px; border-radius: 10px; border: 1px solid #e0e0e0; background: #fff;
+  }
+  .pick-item-info { font-size: 13px; color: #333; line-height: 1.5; }
+  .pick-item-info .cat { font-weight: 700; }
+  .pick-item-info .meta { color: #888; font-size: 12px; }
+  .pick-delete-btn {
+    flex-shrink: 0; margin-left: 10px; padding: 8px 14px; border-radius: 8px;
+    border: 1px solid #e04b4b; color: #e04b4b; background: #fff5f5; font-size: 13px; font-weight: 600;
+  }
+  .pick-delete-btn:disabled { opacity: 0.5; }
+  #pickListStatus { margin-top: 10px; font-size: 13px; text-align: center; color: #666; }
+  #pickListStatus.error { color: #e04b4b; }
 </style>
 </head>
 <body>
@@ -86,10 +102,18 @@
 </div>
 <div id="quickStatus"></div>
 
+<hr class="divider">
+<h2 class="section-title">เลือกลบรายการ</h2>
+<button type="button" id="loadListBtn" class="quick-btn" style="width:100%">แสดงรายการล่าสุด 10 รายการ</button>
+<div id="pickList" class="pick-list"></div>
+<div id="pickListStatus"></div>
+
 <script>
   const LIFF_ID = "2011412816-xGVEjhx9";
+  const API_BASE = "https://armahosting.synology.me:15678/webhook";
   let currentType = "จ่าย";
   let userDisplayName = "";
+  let currentUserId = "";
 
   function withName(text) {
     return userDisplayName ? text + " (บันทึกโดย: " + userDisplayName + ")" : text;
@@ -213,6 +237,91 @@
     });
   });
 
+  const loadListBtn = document.getElementById("loadListBtn");
+  const pickListEl = document.getElementById("pickList");
+  const pickListStatusEl = document.getElementById("pickListStatus");
+
+  const typeLabel = (t) => (t === "fixed" ? "ค่าใช้จ่ายคงที่" : "ค่าใช้จ่ายผันแปร");
+
+  function renderPickList(items) {
+    pickListEl.innerHTML = "";
+    if (!items.length) {
+      pickListStatusEl.classList.remove("error");
+      pickListStatusEl.textContent = "ไม่พบรายการค่าใช้จ่าย";
+      return;
+    }
+    pickListStatusEl.textContent = "";
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "pick-item";
+
+      const info = document.createElement("div");
+      info.className = "pick-item-info";
+      const amountStr = Number(item.amount).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      info.innerHTML =
+        '<div class="cat">' + item.category + " · " + amountStr + " บาท</div>" +
+        '<div class="meta">' + typeLabel(item.expense_type) + " · " + item.expense_date +
+        (item.description ? " · " + item.description : "") + "</div>";
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "pick-delete-btn";
+      delBtn.textContent = "ลบ";
+      delBtn.addEventListener("click", async () => {
+        const ok = confirm("ยืนยันลบรายการนี้?\n" + item.category + " " + amountStr + " บาท (" + item.expense_date + ")");
+        if (!ok) return;
+        delBtn.disabled = true;
+        pickListStatusEl.classList.remove("error");
+        pickListStatusEl.textContent = "กำลังลบ...";
+        try {
+          const res = await fetch(API_BASE + "/carwash-delete-expense", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: item.id, userId: currentUserId })
+          });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          row.remove();
+          pickListStatusEl.textContent = "ลบสำเร็จ";
+          const confirmMsg = withName(
+            "ลบรายการที่เลือก: " + item.category + " " + amountStr + " บาท (" + item.expense_date + ")"
+          );
+          try { await liff.sendMessages([{ type: "text", text: confirmMsg }]); } catch (e) {}
+        } catch (err) {
+          pickListStatusEl.classList.add("error");
+          pickListStatusEl.textContent = "ลบไม่สำเร็จ: " + (err && err.message ? err.message : "ลองใหม่อีกครั้ง");
+          delBtn.disabled = false;
+        }
+      });
+
+      row.appendChild(info);
+      row.appendChild(delBtn);
+      pickListEl.appendChild(row);
+    });
+  }
+
+  loadListBtn.addEventListener("click", async () => {
+    if (!currentUserId) {
+      pickListStatusEl.classList.add("error");
+      pickListStatusEl.textContent = "ไม่พบข้อมูลผู้ใช้ ลองเปิดฟอร์มใหม่อีกครั้ง";
+      return;
+    }
+    loadListBtn.disabled = true;
+    pickListEl.innerHTML = "";
+    pickListStatusEl.classList.remove("error");
+    pickListStatusEl.textContent = "กำลังโหลด...";
+    try {
+      const res = await fetch(API_BASE + "/carwash-list-expenses?userId=" + encodeURIComponent(currentUserId));
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      renderPickList(data.items || []);
+    } catch (err) {
+      pickListStatusEl.classList.add("error");
+      pickListStatusEl.textContent = "โหลดไม่สำเร็จ: " + (err && err.message ? err.message : "ลองใหม่อีกครั้ง");
+    } finally {
+      loadListBtn.disabled = false;
+    }
+  });
+
   liff.init({ liffId: LIFF_ID })
     .then(async () => {
       if (!liff.isLoggedIn()) {
@@ -222,6 +331,7 @@
       try {
         const profile = await liff.getProfile();
         userDisplayName = profile.displayName || "";
+        currentUserId = profile.userId || "";
       } catch (e) {
         // ถ้าดึงชื่อไม่ได้ ก็ยังส่งข้อมูลได้ปกติ เพียงแค่ไม่มีชื่อกำกับ
       }
