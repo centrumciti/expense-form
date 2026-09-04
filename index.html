@@ -62,14 +62,7 @@
 </div>
 
 <label for="category">หมวด</label>
-<select id="category">
-  <option value="ค่าน้ำ">ค่าน้ำ</option>
-  <option value="ค่าไฟ">ค่าไฟ</option>
-  <option value="ค่าเช่า">ค่าเช่า</option>
-  <option value="ค่าโฟม">ค่าโฟม</option>
-  <option value="ค่าซ่อมบำรุง">ค่าซ่อมบำรุง</option>
-  <option value="ค่าเบ็ดเตล็ด">ค่าเบ็ดเตล็ด</option>
-</select>
+<select id="category"></select>
 
 <label for="amount">จำนวนเงิน (บาท)</label>
 <input type="number" id="amount" inputmode="decimal" placeholder="เช่น 500" min="0" step="0.01">
@@ -97,6 +90,48 @@
   const LIFF_ID = "2011412816-xGVEjhx9";
   let currentType = "จ่าย";
 
+  const ALL_CATEGORIES = ["ค่าน้ำ", "ค่าไฟ", "ค่าเช่า", "ค่าโฟม", "ค่าซ่อมบำรุง", "ค่าเบ็ดเตล็ด"];
+  const RECOMMENDED = {
+    "จ่าย": ["ค่าน้ำ", "ค่าไฟ", "ค่าโฟม"],
+    "คงที่": ["ค่าเช่า", "ค่าซ่อมบำรุง", "ค่าเบ็ดเตล็ด"]
+  };
+
+  const categorySelect = document.getElementById("category");
+
+  function populateCategories(type) {
+    const previousValue = categorySelect.value;
+    const recommended = RECOMMENDED[type];
+    const others = ALL_CATEGORIES.filter((c) => !recommended.includes(c));
+    categorySelect.innerHTML = "";
+
+    const grpRecommended = document.createElement("optgroup");
+    grpRecommended.label = "แนะนำสำหรับ" + type;
+    recommended.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      grpRecommended.appendChild(opt);
+    });
+    categorySelect.appendChild(grpRecommended);
+
+    const grpOthers = document.createElement("optgroup");
+    grpOthers.label = "หมวดอื่นๆ";
+    others.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      grpOthers.appendChild(opt);
+    });
+    categorySelect.appendChild(grpOthers);
+
+    // keep the user's previous selection if it's still a valid category
+    if (ALL_CATEGORIES.includes(previousValue)) {
+      categorySelect.value = previousValue;
+    }
+  }
+
+  populateCategories(currentType);
+
   const btnVariable = document.getElementById("btnVariable");
   const btnFixed = document.getElementById("btnFixed");
   const statusEl = document.getElementById("status");
@@ -106,11 +141,13 @@
     currentType = "จ่าย";
     btnVariable.classList.add("active");
     btnFixed.classList.remove("active");
+    populateCategories(currentType);
   });
   btnFixed.addEventListener("click", () => {
     currentType = "คงที่";
     btnFixed.classList.add("active");
     btnVariable.classList.remove("active");
+    populateCategories(currentType);
   });
 
   function pad(n) { return n < 10 ? "0" + n : n; }
