@@ -65,6 +65,11 @@
   .pick-delete-btn:disabled { opacity: 0.5; }
   #pickListStatus { margin-top: 10px; font-size: 13px; text-align: center; color: #666; }
   #pickListStatus.error { color: #e04b4b; }
+  .load-list-btn {
+    width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ddd;
+    background: #fff; font-size: 14px; font-weight: 600; color: #333;
+  }
+  .load-list-btn:disabled { opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -104,7 +109,7 @@
 
 <hr class="divider">
 <h2 class="section-title">เลือกลบรายการ</h2>
-<button type="button" id="loadListBtn" class="quick-btn" style="width:100%">แสดงรายการล่าสุด 10 รายการ</button>
+<button type="button" id="loadListBtn" class="load-list-btn">แสดงรายการล่าสุด 10 รายการ</button>
 <div id="pickList" class="pick-list"></div>
 <div id="pickListStatus"></div>
 
@@ -153,7 +158,6 @@
     });
     categorySelect.appendChild(grpOthers);
 
-    // keep the user's previous selection if it's still a valid category
     if (ALL_CATEGORIES.includes(previousValue)) {
       categorySelect.value = previousValue;
     }
@@ -184,7 +188,7 @@
   submitBtn.addEventListener("click", async () => {
     const category = document.getElementById("category").value;
     const amount = document.getElementById("amount").value;
-    const dateVal = document.getElementById("dateInput").value; // YYYY-MM-DD or ""
+    const dateVal = document.getElementById("dateInput").value;
     const detail = document.getElementById("detail").value.trim();
 
     if (!amount || Number(amount) <= 0) {
@@ -273,12 +277,16 @@
         delBtn.disabled = true;
         pickListStatusEl.classList.remove("error");
         pickListStatusEl.textContent = "กำลังลบ...";
+        const delController = new AbortController();
+        const delTimeoutId = setTimeout(() => delController.abort(), 15000);
         try {
           const res = await fetch(API_BASE + "/carwash-delete-expense", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: item.id, userId: currentUserId })
+            body: JSON.stringify({ id: item.id, userId: currentUserId }),
+            signal: delController.signal
           });
+          clearTimeout(delTimeoutId);
           if (!res.ok) throw new Error("HTTP " + res.status);
           row.remove();
           pickListStatusEl.textContent = "ลบสำเร็จ";
@@ -287,8 +295,10 @@
           );
           try { await liff.sendMessages([{ type: "text", text: confirmMsg }]); } catch (e) {}
         } catch (err) {
+          clearTimeout(delTimeoutId);
           pickListStatusEl.classList.add("error");
-          pickListStatusEl.textContent = "ลบไม่สำเร็จ: " + (err && err.message ? err.message : "ลองใหม่อีกครั้ง");
+          const msg = err && err.name === "AbortError" ? "เชื่อมต่อไม่ได้ภายใน 15 วินาที (เช็คเครือข่าย/VPN)" : (err && err.message ? err.message : "ลองใหม่อีกครั้ง");
+          pickListStatusEl.textContent = "ลบไม่สำเร็จ: " + msg;
           delBtn.disabled = false;
         }
       });
@@ -309,15 +319,21 @@
     pickListEl.innerHTML = "";
     pickListStatusEl.classList.remove("error");
     pickListStatusEl.textContent = "กำลังโหลด...";
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await fetch(API_BASE + "/carwash-list-expenses?userId=" + encodeURIComponent(currentUserId));
+      const res = await fetch(API_BASE + "/carwash-list-expenses?userId=" + encodeURIComponent(currentUserId), {
+        signal: controller.signal
+      });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       renderPickList(data.items || []);
     } catch (err) {
       pickListStatusEl.classList.add("error");
-      pickListStatusEl.textContent = "โหลดไม่สำเร็จ: " + (err && err.message ? err.message : "ลองใหม่อีกครั้ง");
+      const msg = err && err.name === "AbortError" ? "เชื่อมต่อไม่ได้ภายใน 15 วินาที (เช็คเครือข่าย/VPN)" : (err && err.message ? err.message : "ลองใหม่อีกครั้ง");
+      pickListStatusEl.textContent = "โหลดไม่สำเร็จ: " + msg;
     } finally {
+      clearTimeout(timeoutId);
       loadListBtn.disabled = false;
     }
   });
