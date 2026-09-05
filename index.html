@@ -351,6 +351,11 @@
       } catch (e) {
         // ถ้าดึงชื่อไม่ได้ ก็ยังส่งข้อมูลได้ปกติ เพียงแค่ไม่มีชื่อกำกับ
       }
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("action") === "delete") {
+        loadListBtn.scrollIntoView({ behavior: "smooth", block: "start" });
+        loadListBtn.click();
+      }
     })
     .catch((err) => {
       statusEl.textContent = "เปิดใช้งานไม่สำเร็จ: " + (err && err.message ? err.message : "");
